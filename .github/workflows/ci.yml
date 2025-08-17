@@ -10,14 +10,17 @@ jobs:
   test:
     name: Test
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        go-version: [1.20.x, 1.21.x, 1.22.x]
     steps:
     - name: Set up Go
-      uses: actions/setup-go@v2
+      uses: actions/setup-go@v5
       with:
-        go-version: 1.19
+        go-version: ${{ matrix.go-version }}
 
     - name: Check out code
-      uses: actions/checkout@v2
+      uses: actions/checkout@v4
 
     - name: Get dependencies
       run: go mod download
@@ -30,15 +33,32 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - name: Set up Go
-      uses: actions/setup-go@v2
+      uses: actions/setup-go@v5
       with:
-        go-version: 1.19
+        go-version: 1.20.x
 
     - name: Check out code
-      uses: actions/checkout@v2
+      uses: actions/checkout@v4
 
     - name: Get dependencies
       run: go mod download
 
     - name: Benchmark
       run: go test -bench=. -benchmem ./...
+
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: 1.20.x
+
+    - name: Check out code
+      uses: actions/checkout@v4
+
+    - name: Run golangci-lint
+      uses: golangci/golangci-lint-action@v3
+      with:
+        version: latest
