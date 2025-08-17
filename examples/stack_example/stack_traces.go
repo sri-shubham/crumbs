@@ -44,7 +44,8 @@ func DemonstrateStackTraces() {
 	err3 := level1Function(ctx)
 
 	if cerr, ok := err3.(*crumbs.Error); ok {
-		cerr.ForceStack()
+		cerr = cerr.ForceStack()
+		err3 = cerr
 	}
 
 	fmt.Println("\nError with forced stack trace:")

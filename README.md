@@ -124,7 +124,8 @@ crumbs.CaptureStack = true
 crumbs.StackTraceDepth = 32
 
 // Force a stack trace for a specific error
-err := crumbs.New(ctx, "critical error").(*crumbs.Error).ForceStack()
+err := crumbs.New(ctx, "critical error").(*crumbs.Error)
+err = err.ForceStack()
 ```
 
 ### Error Formatting

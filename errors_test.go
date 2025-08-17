@@ -290,7 +290,7 @@ func TestStackTrace(t *testing.T) {
 	t.Run("force stack", func(t *testing.T) {
 		CaptureStack = false
 		err := New(ctx, "test error").(*Error)
-		err.ForceStack()
+		err = err.ForceStack()
 
 		if len(err.GetStack()) == 0 {
 			t.Error("Stack trace should be captured when forced")
