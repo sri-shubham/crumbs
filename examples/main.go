@@ -6,6 +6,7 @@ import (
 	"github.com/sri-shubham/crumbs/examples/basic_example"
 	"github.com/sri-shubham/crumbs/examples/context_example"
 	"github.com/sri-shubham/crumbs/examples/logging_example"
+	"github.com/sri-shubham/crumbs/examples/middleware_example"
 	"github.com/sri-shubham/crumbs/examples/stack_example"
 	"github.com/sri-shubham/crumbs/examples/std_errors_example"
 )
@@ -39,6 +40,11 @@ func main() {
 	fmt.Println("STANDARD ERRORS INTEGRATION EXAMPLE")
 	fmt.Println("====================================")
 	std_errors_example.DemonstrateStandardErrorsMethods()
+
+	fmt.Println("\n\n====================================")
+	fmt.Println("MIDDLEWARE INTEGRATION EXAMPLE")
+	fmt.Println("====================================")
+	middleware_example.RunExample()
 
 	fmt.Println("\n\nAll examples completed!")
 }
