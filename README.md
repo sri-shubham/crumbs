@@ -6,15 +6,15 @@
 [![GitHub Stars](https://img.shields.io/github/stars/sri-shubham/crumbs.svg)](https://github.com/sri-shubham/crumbs/stargazers)
 [![GitHub Issues](https://img.shields.io/github/issues/sri-shubham/crumbs.svg)](https://github.com/sri-shubham/crumbs/issues)
 
-Crumbs is a lightweight, flexible error handling library for Go that adds context to your errors. It's designed to enhance error reporting while maintaining full compatibility with the standard library.
+Crumbs is a rich observability library for Go that bridges the gap between error handling and structured logging. It allows you to attach rich, structured data ("crumbs") to your errors and context, which can then be automatically extracted by your logger or error reporter. This ensures that every error log contains the full context needed for debugging, without cluttering your function signatures.
 
 ## Features
 
-- **Key-Value Context**: Attach key-value pairs ("crumbs") to errors for better debugging and logging
-- **Context Integration**: Automatically gather context information from Go's `context.Context`
+- **Rich Observability**: Carry structured data through your call stack and attach it to errors automatically
+- **Logger Enrichment**: Feed your structured logger (like `slog`) with rich context captured deep within your application logic
+- **Context Integration**: Seamlessly propagate observability data via Go's `context.Context`
 - **Standard Library Compatible**: Works seamlessly with `errors.Is`, `errors.As`, and `errors.Unwrap`
-- **Optional Stack Traces**: Record stack traces when needed
-- **Logging Friendly**: Easily extract structured data for your logging system
+- **Zero-Allocation Hot Paths**: Optimized for high-performance applications with zero-allocation operations for common tasks
 
 ## Installation
 
@@ -108,8 +108,11 @@ ctx = crumbs.AddCrumb(ctx,
     "timestamp", time.Now(),
 )
 
-// Get crumbs from context
+// Get crumbs from context (returns []Crumb)
 allCrumbs := crumbs.GetCrumbs(ctx)
+for _, c := range allCrumbs {
+    fmt.Printf("Key: %s, Value: %v\n", c.Key, c.Value)
+}
 ```
 
 ### Stack Traces
@@ -155,26 +158,41 @@ if cerr, ok := err.(*crumbs.Error); ok {
 
 ## Logging Integration
 
-Crumbs errors work great with structured logging:
+Crumbs integrates seamlessly with modern structured logging like `log/slog`:
 
 ```go
-func LogError(logger Logger, err error) {
-    if err == nil {
-        return
-    }
-    
-    msg := err.Error()
-    fields := map[string]interface{}{}
-    
+import "log/slog"
+
+// LogError logs an error along with all its attached crumbs
+func LogError(logger *slog.Logger, msg string, err error) {
+    // Start with the error itself
+    args := []any{"error", err}
+
+    // Extract crumbs if available
     var cerr *crumbs.Error
     if errors.As(err, &cerr) {
-        // Add all crumbs as fields
         for _, c := range cerr.GetCrumbs() {
-            fields[c.Key] = c.Value
+            // Add each crumb as a key-value pair
+            args = append(args, slog.Any(c.Key, c.Value))
         }
     }
-    
-    logger.Error(msg, fields)
+
+    // Log with all context
+    logger.Error(msg, args...)
+}
+
+// LoggerWithCrumbs creates a logger pre-filled with error context
+func LoggerWithCrumbs(logger *slog.Logger, err error) *slog.Logger {
+    var cerr *crumbs.Error
+    if errors.As(err, &cerr) {
+        crumbs := cerr.GetCrumbs()
+        args := make([]any, 0, len(crumbs)*2)
+        for _, c := range crumbs {
+            args = append(args, c.Key, c.Value)
+        }
+        return logger.With(args...)
+    }
+    return logger
 }
 ```
 
@@ -187,6 +205,21 @@ See the [examples](./examples) directory for comprehensive usage examples:
 - Stack traces
 - Logging integration
 - Standard library errors compatibility
+
+## Integrations
+
+Crumbs is designed to play nicely with the Go ecosystem.
+
+### Logging
+
+We provide a first-class integration for `log/slog` via the `integrations/slog` package. This adapter automatically extracts crumbs from your context and errors, injecting them as structured attributes into your logs.
+
+- **[slog Adapter](./integrations/slog)**: Seamless integration with Go's structured logger.
+- **[Logger Interface](./logger)**: A generic interface for building your own logging adapters.
+
+### Middleware
+
+Crumbs works great with HTTP middleware to capture request-scoped metadata (like Request ID, User ID, Path) at the edge and propagate it automatically through your application. See the [Middleware Example](./examples/middleware_example) for a demonstration.
 
 ## Benchmarks
 
