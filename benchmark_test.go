@@ -87,7 +87,7 @@ func BenchmarkGetCrumbs(b *testing.B) {
 		"key3", true)
 
 	b.ResetTimer()
-	var result map[string]interface{}
+	var result []Crumb
 	for i := 0; i < b.N; i++ {
 		result = GetCrumbs(ctx)
 	}

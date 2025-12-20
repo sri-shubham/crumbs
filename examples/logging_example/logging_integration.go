@@ -81,8 +81,8 @@ func LogError(logger Logger, err error) {
 	var cerr *crumbs.Error
 	if errors.As(err, &cerr) {
 		// Add all crumbs as fields
-		for k, v := range cerr.GetCrumbs() {
-			fields[k] = v
+		for _, c := range cerr.GetCrumbs() {
+			fields[c.Key] = c.Value
 		}
 
 		// Add stack trace if available
