@@ -82,11 +82,19 @@ func RunExample() {
 	// Show crumbs explicitly
 	fmt.Println("\nExtracting and using crumbs directly:")
 	if cerr, ok := err.(*crumbs.Error); ok {
-		crumbsMap := cerr.GetCrumbs()
-		fmt.Println("Request ID:", crumbsMap["requestID"])
-		fmt.Println("User ID:", crumbsMap["userID"])
-		fmt.Println("Action:", crumbsMap["action"])
-		fmt.Println("Data Size:", crumbsMap["dataSize"])
+		crumbsSlice := cerr.GetCrumbs()
+		for _, c := range crumbsSlice {
+			switch c.Key {
+			case "requestID":
+				fmt.Println("Request ID:", c.Value)
+			case "userID":
+				fmt.Println("User ID:", c.Value)
+			case "action":
+				fmt.Println("Action:", c.Value)
+			case "dataSize":
+				fmt.Println("Data Size:", c.Value)
+			}
+		}
 	}
 
 	// Demonstrate how to get crumbs from a context

@@ -7,6 +7,14 @@ import (
 	"testing"
 )
 
+func crumbsToMap(crumbs []Crumb) map[string]interface{} {
+	m := make(map[string]interface{})
+	for _, c := range crumbs {
+		m[c.Key] = c.Value
+	}
+	return m
+}
+
 func TestNew(t *testing.T) {
 	ctx := context.Background()
 
@@ -29,7 +37,7 @@ func TestNew(t *testing.T) {
 			t.Fatal("Expected *Error type")
 		}
 
-		crumbs := cerr.GetCrumbs()
+		crumbs := crumbsToMap(cerr.GetCrumbs())
 		if crumbs["key1"] != "value1" {
 			t.Errorf("Expected crumbs['key1'] = 'value1', got '%v'", crumbs["key1"])
 		}
@@ -72,7 +80,7 @@ func TestWrap(t *testing.T) {
 			t.Fatal("Expected *Error type")
 		}
 
-		crumbs := cerr.GetCrumbs()
+		crumbs := crumbsToMap(cerr.GetCrumbs())
 		if crumbs["key1"] != "value1" {
 			t.Errorf("Expected crumbs['key1'] = 'value1', got '%v'", crumbs["key1"])
 		}
@@ -193,7 +201,7 @@ func TestContextCrumbs(t *testing.T) {
 	ctx = AddCrumb(ctx, "ctx1", "value1", "ctx2", 42)
 
 	// Check GetCrumbs
-	crumbs := GetCrumbs(ctx)
+	crumbs := crumbsToMap(GetCrumbs(ctx))
 	if crumbs["ctx1"] != "value1" || crumbs["ctx2"] != 42 {
 		t.Errorf("GetCrumbs failed, got %v", crumbs)
 	}
@@ -205,7 +213,7 @@ func TestContextCrumbs(t *testing.T) {
 		t.Fatal("Expected *Error type")
 	}
 
-	errCrumbs := cerr.GetCrumbs()
+	errCrumbs := crumbsToMap(cerr.GetCrumbs())
 	if errCrumbs["ctx1"] != "value1" || errCrumbs["ctx2"] != 42 {
 		t.Errorf("Context crumbs not included in error, got %v", errCrumbs)
 	}
@@ -216,7 +224,7 @@ func TestAddCrumb(t *testing.T) {
 		ctx := context.Background()
 		ctx = AddCrumb(ctx, "key", "value")
 
-		crumbs := GetCrumbs(ctx)
+		crumbs := crumbsToMap(GetCrumbs(ctx))
 		if crumbs["key"] != "value" {
 			t.Errorf("Expected crumbs['key'] = 'value', got '%v'", crumbs["key"])
 		}
@@ -227,7 +235,7 @@ func TestAddCrumb(t *testing.T) {
 		ctx = AddCrumb(ctx, "key1", "value1")
 		ctx = AddCrumb(ctx, "key2", "value2")
 
-		crumbs := GetCrumbs(ctx)
+		crumbs := crumbsToMap(GetCrumbs(ctx))
 		if crumbs["key1"] != "value1" || crumbs["key2"] != "value2" {
 			t.Errorf("Expected both crumbs, got %v", crumbs)
 		}
@@ -238,7 +246,7 @@ func TestAddCrumb(t *testing.T) {
 		ctx = AddCrumb(ctx, "key", "value1")
 		ctx = AddCrumb(ctx, "key", "value2")
 
-		crumbs := GetCrumbs(ctx)
+		crumbs := crumbsToMap(GetCrumbs(ctx))
 		if crumbs["key"] != "value2" {
 			t.Errorf("Expected crumbs['key'] = 'value2', got '%v'", crumbs["key"])
 		}
@@ -248,7 +256,7 @@ func TestAddCrumb(t *testing.T) {
 		ctx := context.Background()
 		ctx = AddCrumb(ctx, "key1", "value1", "key2", "value2")
 
-		crumbs := GetCrumbs(ctx)
+		crumbs := crumbsToMap(GetCrumbs(ctx))
 		if crumbs["key1"] != "value1" || crumbs["key2"] != "value2" {
 			t.Errorf("Expected both crumbs, got %v", crumbs)
 		}
@@ -258,7 +266,7 @@ func TestAddCrumb(t *testing.T) {
 		ctx := context.Background()
 		ctx = AddCrumb(ctx, 123, "value") // Should be ignored
 
-		crumbs := GetCrumbs(ctx)
+		crumbs := crumbsToMap(GetCrumbs(ctx))
 		if len(crumbs) > 0 {
 			t.Errorf("Expected no crumbs, got %v", crumbs)
 		}
