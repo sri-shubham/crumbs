@@ -142,8 +142,11 @@ formatted := crumbs.FormatError(err, true, true)
 
 ```go
 if cerr, ok := err.(*crumbs.Error); ok {
-    // Get all crumbs
+    // Get all crumbs (returns []Crumb)
     allCrumbs := cerr.GetCrumbs()
+    for _, c := range allCrumbs {
+        fmt.Printf("Key: %s, Value: %v\n", c.Key, c.Value)
+    }
     
     // Get stack trace
     stack := cerr.GetStack()
@@ -166,8 +169,8 @@ func LogError(logger Logger, err error) {
     var cerr *crumbs.Error
     if errors.As(err, &cerr) {
         // Add all crumbs as fields
-        for k, v := range cerr.GetCrumbs() {
-            fields[k] = v
+        for _, c := range cerr.GetCrumbs() {
+            fields[c.Key] = c.Value
         }
     }
     
@@ -192,27 +195,22 @@ Performance is a key consideration in error handling. Below are benchmark result
 ```
 goos: darwin
 goarch: arm64
+pkg: github.com/sri-shubham/crumbs
 cpu: Apple M1
-BenchmarkErrorsNew-8                    86884852                13.70 ns/op          16 B/op           1 allocs/op
-BenchmarkCrumbsNew-8                    27884496                41.84 ns/op         112 B/op           2 allocs/op
-BenchmarkCrumbsNewWithCrumbs-8          10454186               115.5 ns/op          400 B/op           3 allocs/op
-BenchmarkErrorsWrap-8                   14462412                82.47 ns/op          56 B/op           2 allocs/op
-BenchmarkCrumbsWrap-8                   26456070                42.81 ns/op         112 B/op           2 allocs/op
-BenchmarkCrumbsWrapWithCrumbs-8         10173625               120.7 ns/op          400 B/op           3 allocs/op
-BenchmarkAddCrumb-8                     11974952                98.25 ns/op         384 B/op           3 allocs/op
-BenchmarkAddMultipleCrumbs-8            10119661               116.8 ns/op          384 B/op           3 allocs/op
-BenchmarkGetCrumbs-8                     8646422               137.9 ns/op          336 B/op           2 allocs/op
-BenchmarkNewWithStackTraceEnabled-8       894884              1323 ns/op            816 B/op           5 allocs/op
-BenchmarkNewWithStackTraceDisabled-8    27499125                41.75 ns/op         112 B/op           2 allocs/op
-BenchmarkFormatError-8                   3744361               342.4 ns/op          184 B/op           8 allocs/op
-BenchmarkFormatErrorWithStack-8          1000000              1024 ns/op           1872 B/op          24 allocs/op
+BenchmarkErrorsNew-8                    85283263                13.82 ns/op           16 B/op           1 allocs/op
+BenchmarkCrumbsNew-8                    45591188                27.23 ns/op           80 B/op           1 allocs/op
+BenchmarkCrumbsNewWithCrumbs-8          22543290                56.04 ns/op          176 B/op           2 allocs/op
+BenchmarkErrorsWrap-8                   14096294                82.06 ns/op           56 B/op           2 allocs/op
+BenchmarkCrumbsWrap-8                   45918513                26.96 ns/op           80 B/op           1 allocs/op
+BenchmarkCrumbsWrapWithCrumbs-8         21582700                55.39 ns/op          176 B/op           2 allocs/op
+BenchmarkAddCrumb-8                     19820527                60.57 ns/op          104 B/op           3 allocs/op
+BenchmarkAddMultipleCrumbs-8            16305519                73.32 ns/op          168 B/op           3 allocs/op
+BenchmarkGetCrumbs-8                    43355341                27.47 ns/op           96 B/op           1 allocs/op
+BenchmarkNewWithStackTraceEnabled-8       904336              1322 ns/op             784 B/op           4 allocs/op
+BenchmarkNewWithStackTraceDisabled-8    45363045                26.17 ns/op           80 B/op           1 allocs/op
+BenchmarkFormatError-8                   4431264               271.9 ns/op           184 B/op           8 allocs/op
+BenchmarkFormatErrorWithStack-8          1276100               935.1 ns/op          1872 B/op          24 allocs/op
 ```
-
-Key observations:
-- Adding crumbs adds a modest performance cost (~40ns vs ~14ns for basic errors)
-- Stack trace capture is significantly more expensive (~1300ns vs ~40ns)
-- Disabling stack traces keeps performance close to basic error creation
-- Crumbs are designed to be efficient when you need context but not stack traces
 
 For more detailed benchmark information and analysis, see [BENCHMARKS.md](./BENCHMARKS.md).
 
