@@ -120,11 +120,8 @@ for _, c := range allCrumbs {
 Stack traces are disabled by default for performance reasons but can be enabled when needed:
 
 ```go
-// Enable stack traces globally
-crumbs.CaptureStack = true
-
-// Configure stack trace depth (0 for unlimited)
-crumbs.StackTraceDepth = 32
+// Enable stack traces globally and set depth (0 for unlimited)
+crumbs.ConfigureStackTraces(true, 32)
 
 // Force a stack trace for a specific error
 err := crumbs.New(ctx, "critical error").(*crumbs.Error)

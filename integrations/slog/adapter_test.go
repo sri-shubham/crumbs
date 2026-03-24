@@ -61,7 +61,7 @@ func TestAdapter_Logging(t *testing.T) {
 
 	t.Run("Error Crumbs", func(t *testing.T) {
 		buf.Reset()
-		err := crumbs.New(ctx, "something went wrong", "user_id", "u-999")
+		err := crumbs.NewError(ctx, "something went wrong", "user_id", "u-999")
 		adapter.Error(ctx, "error occurred", err)
 
 		var logEntry map[string]any

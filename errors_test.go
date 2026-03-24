@@ -15,11 +15,11 @@ func crumbsToMap(crumbs []Crumb) map[string]interface{} {
 	return m
 }
 
-func TestNew(t *testing.T) {
+func TestNewError(t *testing.T) {
 	ctx := context.Background()
 
 	t.Run("basic error creation", func(t *testing.T) {
-		err := New(ctx, "test error")
+		err := NewError(ctx, "test error")
 		if err == nil {
 			t.Fatal("Expected error, got nil")
 		}
@@ -30,7 +30,7 @@ func TestNew(t *testing.T) {
 	})
 
 	t.Run("with crumbs", func(t *testing.T) {
-		err := New(ctx, "test error", "key1", "value1", "key2", 42)
+		err := NewError(ctx, "test error", "key1", "value1", "key2", 42)
 
 		cerr, ok := err.(*Error)
 		if !ok {
@@ -48,12 +48,12 @@ func TestNew(t *testing.T) {
 	})
 }
 
-func TestWrap(t *testing.T) {
+func TestWrapError(t *testing.T) {
 	ctx := context.Background()
 	baseErr := errors.New("base error")
 
 	t.Run("basic wrapping", func(t *testing.T) {
-		err := Wrap(ctx, baseErr, "wrapped error")
+		err := WrapError(ctx, baseErr, "wrapped error")
 
 		if err == nil {
 			t.Fatal("Expected error, got nil")
@@ -73,7 +73,7 @@ func TestWrap(t *testing.T) {
 	})
 
 	t.Run("with crumbs", func(t *testing.T) {
-		err := Wrap(ctx, baseErr, "wrapped error", "key1", "value1")
+		err := WrapError(ctx, baseErr, "wrapped error", "key1", "value1")
 
 		cerr, ok := err.(*Error)
 		if !ok {
@@ -87,7 +87,7 @@ func TestWrap(t *testing.T) {
 	})
 
 	t.Run("wrap nil", func(t *testing.T) {
-		err := Wrap(ctx, nil, "wrapped nil")
+		err := WrapError(ctx, nil, "wrapped nil")
 		if err != nil {
 			t.Errorf("Expected nil when wrapping nil, got '%v'", err)
 		}
@@ -131,16 +131,16 @@ func TestErrorsIs(t *testing.T) {
 	sentinel := errors.New("sentinel error")
 
 	t.Run("direct wrap", func(t *testing.T) {
-		err := Wrap(ctx, sentinel, "wrapped")
+		err := WrapError(ctx, sentinel, "wrapped")
 		if !errors.Is(err, sentinel) {
 			t.Error("errors.Is should find sentinel in direct wrap")
 		}
 	})
 
 	t.Run("deep wrap", func(t *testing.T) {
-		err1 := Wrap(ctx, sentinel, "inner")
-		err2 := Wrap(ctx, err1, "middle")
-		err3 := Wrap(ctx, err2, "outer")
+		err1 := WrapError(ctx, sentinel, "inner")
+		err2 := WrapError(ctx, err1, "middle")
+		err3 := WrapError(ctx, err2, "outer")
 
 		if !errors.Is(err3, sentinel) {
 			t.Error("errors.Is should find sentinel in deep wrap")
@@ -149,7 +149,7 @@ func TestErrorsIs(t *testing.T) {
 
 	t.Run("different error", func(t *testing.T) {
 		other := errors.New("other error")
-		err := Wrap(ctx, sentinel, "wrapped")
+		err := WrapError(ctx, sentinel, "wrapped")
 
 		if errors.Is(err, other) {
 			t.Error("errors.Is should not match different errors")
@@ -170,7 +170,7 @@ func TestErrorsAs(t *testing.T) {
 	custom := &customError{value: 42}
 
 	t.Run("direct wrap", func(t *testing.T) {
-		err := Wrap(ctx, custom, "wrapped")
+		err := WrapError(ctx, custom, "wrapped")
 
 		var ce *customError
 		if !errors.As(err, &ce) {
@@ -181,9 +181,9 @@ func TestErrorsAs(t *testing.T) {
 	})
 
 	t.Run("deep wrap", func(t *testing.T) {
-		err1 := Wrap(ctx, custom, "inner")
-		err2 := Wrap(ctx, err1, "middle")
-		err3 := Wrap(ctx, err2, "outer")
+		err1 := WrapError(ctx, custom, "inner")
+		err2 := WrapError(ctx, err1, "middle")
+		err3 := WrapError(ctx, err2, "outer")
 
 		var ce *customError
 		if !errors.As(err3, &ce) {
@@ -207,7 +207,7 @@ func TestContextCrumbs(t *testing.T) {
 	}
 
 	// Check that crumbs are included in errors
-	err := New(ctx, "test error")
+	err := NewError(ctx, "test error")
 	cerr, ok := err.(*Error)
 	if !ok {
 		t.Fatal("Expected *Error type")
@@ -275,11 +275,11 @@ func TestAddCrumb(t *testing.T) {
 
 func TestStackTrace(t *testing.T) {
 	ctx := context.Background()
-	origCaptureStack := CaptureStack
+	origcaptureStack := captureStack
 
 	t.Run("capture disabled", func(t *testing.T) {
-		CaptureStack = false
-		err := New(ctx, "test error").(*Error)
+		captureStack = false
+		err := NewError(ctx, "test error").(*Error)
 
 		if len(err.GetStack()) > 0 {
 			t.Error("Stack trace should not be captured when disabled")
@@ -287,8 +287,8 @@ func TestStackTrace(t *testing.T) {
 	})
 
 	t.Run("capture enabled", func(t *testing.T) {
-		CaptureStack = true
-		err := New(ctx, "test error").(*Error)
+		captureStack = true
+		err := NewError(ctx, "test error").(*Error)
 
 		if len(err.GetStack()) == 0 {
 			t.Error("Stack trace should be captured when enabled")
@@ -296,8 +296,8 @@ func TestStackTrace(t *testing.T) {
 	})
 
 	t.Run("force stack", func(t *testing.T) {
-		CaptureStack = false
-		err := New(ctx, "test error").(*Error)
+		captureStack = false
+		err := NewError(ctx, "test error").(*Error)
 		err = err.ForceStack()
 
 		if len(err.GetStack()) == 0 {
@@ -306,30 +306,30 @@ func TestStackTrace(t *testing.T) {
 	})
 
 	t.Run("stack depth", func(t *testing.T) {
-		CaptureStack = true
-		origDepth := StackTraceDepth
-		StackTraceDepth = 2
+		captureStack = true
+		origDepth := stackTraceDepth
+		stackTraceDepth = 2
 
-		err := New(ctx, "test error").(*Error)
+		err := NewError(ctx, "test error").(*Error)
 
 		// Check that frames were limited
 		if len(err.GetStack()) > 5 {
 			t.Errorf("Expected limited stack frames, got %d", len(err.GetStack()))
 		}
 
-		StackTraceDepth = origDepth
+		stackTraceDepth = origDepth
 	})
 
 	// Restore original setting
-	CaptureStack = origCaptureStack
+	captureStack = origcaptureStack
 }
 
 func TestFormatError(t *testing.T) {
 	ctx := context.Background()
-	CaptureStack = true
-	defer func() { CaptureStack = false }()
+	captureStack = true
+	defer func() { captureStack = false }()
 
-	err := New(ctx, "test error", "key1", "value1")
+	err := NewError(ctx, "test error", "key1", "value1")
 
 	t.Run("basic format", func(t *testing.T) {
 		formatted := FormatError(err, false, false)

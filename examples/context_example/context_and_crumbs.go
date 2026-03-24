@@ -38,7 +38,7 @@ func simulateRequest(ctx context.Context, userID string, action string) error {
 func validateRequest(ctx context.Context, userID string) error {
 	if userID == "invalid" {
 		// Create an error that will automatically include all crumbs from ctx
-		return crumbs.New(ctx, "invalid user",
+		return crumbs.NewError(ctx, "invalid user",
 			"validationTime", "2025-08-17T10:30:01Z")
 	}
 	return nil
@@ -50,14 +50,14 @@ func processData(ctx context.Context) error {
 
 	// Simulate an error
 	// The error will include all crumbs from the context
-	return crumbs.New(ctx, "processing failed",
+	return crumbs.NewError(ctx, "processing failed",
 		"processingTime", "2025-08-17T10:30:02Z")
 }
 
 func saveResults(ctx context.Context) error {
 	// This wouldn't execute due to earlier error,
 	// but included for completeness
-	return crumbs.New(ctx, "save succeeded")
+	return crumbs.NewError(ctx, "save succeeded")
 }
 
 // RunExample demonstrates the context and crumbs example
