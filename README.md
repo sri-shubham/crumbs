@@ -140,15 +140,17 @@ formatted := crumbs.FormatError(err, true, true)
 
 ### Extracting Data
 
+With `crumbs`, context is seamlessly merged all the way up the error chain. When you call `GetCrumbs()` on an error wrapper, it organically provides all key-value pairs collected at every level!
+
 ```go
 if cerr, ok := err.(*crumbs.Error); ok {
-    // Get all crumbs (returns []Crumb)
+    // Get all nested crumbs from the entire error chain
     allCrumbs := cerr.GetCrumbs()
     for _, c := range allCrumbs {
         fmt.Printf("Key: %s, Value: %v\n", c.Key, c.Value)
     }
     
-    // Get stack trace
+    // Get the root stack trace (safely preserved from where the error originated)
     stack := cerr.GetStack()
 }
 ```
