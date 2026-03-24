@@ -425,6 +425,7 @@ func TestBadKeysAndCoverage(t *testing.T) {
 }
 
 func TestGetCrumbsNil(t *testing.T) {
+	//nolint:staticcheck // deliberately testing nil safeguard
 	if GetCrumbs(nil) != nil {
 		t.Error("GetCrumbs(nil) should be nil")
 	}
