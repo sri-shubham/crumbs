@@ -36,11 +36,11 @@ func DemonstrateStandardErrorsMethods() {
 	fmt.Println("\n1. Using errors.Is with crumbs:")
 
 	// Create a chain of wrapped errors
-	notFoundErr := crumbs.Wrap(ctx, ErrNotFound, "user profile not found",
+	notFoundErr := crumbs.WrapError(ctx, ErrNotFound, "user profile not found",
 		"userID", "12345",
 		"source", "database")
 
-	timeoutErr := crumbs.Wrap(ctx, ErrTimeout, "database query timed out",
+	timeoutErr := crumbs.WrapError(ctx, ErrTimeout, "database query timed out",
 		"query", "SELECT * FROM users WHERE id = ?",
 		"timeout", "5s")
 
@@ -53,9 +53,9 @@ func DemonstrateStandardErrorsMethods() {
 	fmt.Println("\n2. Deep wrapping with errors.Is:")
 
 	// Create a deeply nested error chain
-	deepErr := crumbs.Wrap(ctx,
-		crumbs.Wrap(ctx,
-			crumbs.Wrap(ctx, ErrPermission, "access check failed",
+	deepErr := crumbs.WrapError(ctx,
+		crumbs.WrapError(ctx,
+			crumbs.WrapError(ctx, ErrPermission, "access check failed",
 				"resource", "file-123"),
 			"user verification failed",
 			"method", "OAuth"),
@@ -71,7 +71,7 @@ func DemonstrateStandardErrorsMethods() {
 
 	// Create a custom error and wrap it with crumbs
 	originalErr := &CustomError{Code: 404, Message: "user not found"}
-	wrappedCustomErr := crumbs.Wrap(ctx, originalErr, "user lookup failed",
+	wrappedCustomErr := crumbs.WrapError(ctx, originalErr, "user lookup failed",
 		"username", "alice",
 		"method", "ldap")
 
@@ -90,7 +90,7 @@ func DemonstrateStandardErrorsMethods() {
 
 	// Create a wrapped error
 	baseErr := errors.New("base error")
-	wrappedErr := crumbs.Wrap(ctx, baseErr, "wrapped message",
+	wrappedErr := crumbs.WrapError(ctx, baseErr, "wrapped message",
 		"key1", "value1")
 
 	// Manually unwrap and print each layer
@@ -104,15 +104,15 @@ func DemonstrateStandardErrorsMethods() {
 	// Example 5: Combining with Go 1.20+ error joining
 	fmt.Println("\n5. Using with error joining (Go 1.20+):")
 
-	err1 := crumbs.New(ctx, "first error", "order", 1)
-	err2 := crumbs.New(ctx, "second error", "order", 2)
-	err3 := crumbs.New(ctx, "third error", "order", 3)
+	err1 := crumbs.NewError(ctx, "first error", "order", 1)
+	err2 := crumbs.NewError(ctx, "second error", "order", 2)
+	err3 := crumbs.NewError(ctx, "third error", "order", 3)
 
 	// Join errors (Go 1.20+)
 	joinedErr := errors.Join(err1, err2, err3)
 
 	// Wrap the joined errors with crumbs
-	wrappedJoinedErr := crumbs.Wrap(ctx, joinedErr, "multiple errors occurred",
+	wrappedJoinedErr := crumbs.WrapError(ctx, joinedErr, "multiple errors occurred",
 		"errorCount", 3,
 		"operation", "batch processing")
 

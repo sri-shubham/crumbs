@@ -10,12 +10,19 @@ import (
 
 // Package level configuration settings
 var (
-	// CaptureStack controls whether stack traces are captured
-	CaptureStack = false
+	// captureStack controls whether stack traces are captured globally
+	captureStack = false
 
-	// StackTraceDepth controls how many frames to capture (0 for unlimited)
-	StackTraceDepth = 32
+	// stackTraceDepth controls how many frames to capture (0 for unlimited)
+	stackTraceDepth = 32
 )
+
+// ConfigureStackTraces sets the global stack trace configuration.
+// It is recommended to only call this during application initialization.
+func ConfigureStackTraces(capture bool, depth int) {
+	captureStack = capture
+	stackTraceDepth = depth
+}
 
 type crumbsKey struct{}
 
@@ -29,10 +36,8 @@ type StackFrame struct {
 // Crumb represents a key-value pair
 type Crumb struct {
 	Key   string
-	Value interface{}
+	Value any
 }
-
-// Empty line to replace the removed category code
 
 // Error is a custom error type that wraps a standard error and supports key-value pairs.
 type Error struct {
@@ -101,7 +106,7 @@ func (e *Error) ForceStack() *Error {
 
 // captureStack captures the current stack trace.
 func (e *Error) captureStack(skip int) {
-	depth := StackTraceDepth
+	depth := stackTraceDepth
 	if depth <= 0 {
 		depth = 32 // Reasonable default if set to unlimited
 	}
@@ -135,13 +140,14 @@ func (e *Error) captureStack(skip int) {
 	}
 }
 
-// New creates a new Error with context information and key-value pairs.
-func New(ctx context.Context, msg string, kv ...interface{}) error {
+// NewError creates a new error with the given message and key-value pairs.
+// It captures the stack trace if ConfigureStackTraces has enabled it.
+func NewError(ctx context.Context, msg string, kv ...interface{}) error {
 	return newError(ctx, nil, msg, kv...)
 }
 
-// Wrap creates an Error with a message and key-value pairs.
-func Wrap(ctx context.Context, err error, msg string, kv ...interface{}) error {
+// WrapError creates an Error with a message and key-value pairs.
+func WrapError(ctx context.Context, err error, msg string, kv ...interface{}) error {
 	if err == nil {
 		return nil
 	}
@@ -163,43 +169,69 @@ func Wrapf(ctx context.Context, err error, format string, args ...interface{}) e
 
 // newError is a helper function to create errors with context
 func newError(ctx context.Context, err error, msg string, kv ...interface{}) error {
-	// Create crumbs slice
-	var crumbs []Crumb
+	var errCrumbs []Crumb
+	if err != nil {
+		var cerr *Error
+		if errors.As(err, &cerr) {
+			errCrumbs = cerr.Crumbs
+		}
+	}
 
-	// First, add any crumbs from the context
+	var ctxCrumbs []Crumb
 	if ctx != nil {
-		if ctxCrumbs, ok := ctx.Value(crumbsKey{}).([]Crumb); ok {
-			crumbs = make([]Crumb, len(ctxCrumbs), len(ctxCrumbs)+len(kv)/2)
-			copy(crumbs, ctxCrumbs)
+		if c, ok := ctx.Value(crumbsKey{}).([]Crumb); ok {
+			ctxCrumbs = c
 		}
 	}
 
-	// If crumbs is still nil (no context crumbs), initialize it
-	if crumbs == nil {
-		crumbs = make([]Crumb, 0, len(kv)/2)
-	}
+	kvLen := (len(kv) + 1) / 2
+	totalCap := len(errCrumbs) + len(ctxCrumbs) + kvLen
 
-	// Then add any key-value pairs passed directly
-	for i := 0; i+1 < len(kv); i += 2 {
-		key, ok := kv[i].(string)
-		if !ok {
-			continue
+	var crumbs []Crumb
+	if totalCap > 0 {
+		crumbs = make([]Crumb, 0, totalCap)
+		if len(errCrumbs) > 0 {
+			crumbs = append(crumbs, errCrumbs...)
 		}
-		crumbs = append(crumbs, Crumb{Key: key, Value: kv[i+1]})
+		if len(ctxCrumbs) > 0 {
+			crumbs = append(crumbs, ctxCrumbs...)
+		}
+
+		for i := 0; i < len(kv); i += 2 {
+			if i+1 < len(kv) {
+				key, ok := kv[i].(string)
+				if !ok {
+					continue
+				}
+				crumbs = append(crumbs, Crumb{Key: key, Value: kv[i+1]})
+			} else {
+				key, ok := kv[i].(string)
+				if ok {
+					crumbs = append(crumbs, Crumb{Key: "!BADKEY", Value: key})
+				} else {
+					crumbs = append(crumbs, Crumb{Key: "!BADKEY", Value: kv[i]})
+				}
+			}
+		}
 	}
 
-	// Use the global configuration for stack trace capture
-	captureStack := CaptureStack
-
-	// Create the error
 	e := &Error{
 		Err:    err,
 		Msg:    msg,
 		Crumbs: crumbs,
 	}
 
-	// Capture the stack trace if needed
-	if captureStack {
+	// Inherit (keep) the root stack trace from the underlying error if it already has one
+	var hasStack bool
+	if err != nil {
+		var cerr *Error
+		if errors.As(err, &cerr) && len(cerr.Stack) > 0 {
+			e.Stack = cerr.Stack
+			hasStack = true
+		}
+	}
+
+	if captureStack && !hasStack {
 		e.captureStack(3) // Skip newError, Wrap/New, and caller
 	}
 
@@ -214,25 +246,30 @@ func AddCrumb(ctx context.Context, kv ...interface{}) context.Context {
 
 	var crumbs []Crumb
 
-	// Get existing crumbs if any
 	if existing, ok := ctx.Value(crumbsKey{}).([]Crumb); ok {
-		// Create a copy to avoid modifying the existing slice in the context
-		crumbs = make([]Crumb, len(existing), len(existing)+len(kv)/2)
+		crumbs = make([]Crumb, len(existing), len(existing)+(len(kv)+1)/2)
 		copy(crumbs, existing)
 	} else {
-		crumbs = make([]Crumb, 0, len(kv)/2)
+		crumbs = make([]Crumb, 0, (len(kv)+1)/2)
 	}
 
-	// Add the new crumbs
-	for i := 0; i+1 < len(kv); i += 2 {
-		key, ok := kv[i].(string)
-		if !ok {
-			continue // Skip if key is not a string
+	for i := 0; i < len(kv); i += 2 {
+		if i+1 < len(kv) {
+			key, ok := kv[i].(string)
+			if !ok {
+				continue // Skip if key is not a string
+			}
+			crumbs = append(crumbs, Crumb{Key: key, Value: kv[i+1]})
+		} else {
+			key, ok := kv[i].(string)
+			if ok {
+				crumbs = append(crumbs, Crumb{Key: "!BADKEY", Value: key})
+			} else {
+				crumbs = append(crumbs, Crumb{Key: "!BADKEY", Value: kv[i]})
+			}
 		}
-		crumbs = append(crumbs, Crumb{Key: key, Value: kv[i+1]})
 	}
 
-	// Return new context with updated crumbs
 	return context.WithValue(ctx, crumbsKey{}, crumbs)
 }
 
@@ -243,7 +280,6 @@ func GetCrumbs(ctx context.Context) []Crumb {
 	}
 
 	if crumbs, ok := ctx.Value(crumbsKey{}).([]Crumb); ok {
-		// Return a copy to prevent modification
 		result := make([]Crumb, len(crumbs))
 		copy(result, crumbs)
 		return result
@@ -251,18 +287,23 @@ func GetCrumbs(ctx context.Context) []Crumb {
 
 	return nil
 }
-// FormatError returns a detailed string representation of the error,
-// optionally including stack trace, crumbs, and category
-func FormatError(err error, includeStack bool, includeCrumbs bool) string {
-	var sb strings.Builder
 
-	// Basic error message
+// FormatError returns a detailed string representation of the error,
+// formatted with crumbs and stack trace belonging to the outermost wrapper.
+func FormatError(err error, includeStack bool, includeCrumbs bool) string {
+	if err == nil {
+		return ""
+	}
+
+	var sb strings.Builder
 	sb.WriteString(err.Error())
 
-	// Try to get our custom error
+	if !includeStack && !includeCrumbs {
+		return sb.String()
+	}
+
 	var cerr *Error
 	if errors.As(err, &cerr) {
-		// Add crumbs if requested
 		if includeCrumbs && len(cerr.Crumbs) > 0 {
 			sb.WriteString("\nCrumbs:")
 			for _, crumb := range cerr.Crumbs {
@@ -270,7 +311,6 @@ func FormatError(err error, includeStack bool, includeCrumbs bool) string {
 			}
 		}
 
-		// Add stack trace if requested
 		if includeStack && len(cerr.Stack) > 0 {
 			sb.WriteString("\nStack trace:")
 			for _, frame := range cerr.Stack {

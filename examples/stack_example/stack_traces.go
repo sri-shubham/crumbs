@@ -13,11 +13,8 @@ func DemonstrateStackTraces() {
 	fmt.Println("Stack Traces Example")
 	fmt.Println("===================")
 
-	// Store the original value to restore it later
-	originalSetting := crumbs.CaptureStack
-
 	fmt.Println("1. Enabling stack traces globally:")
-	crumbs.CaptureStack = true
+	crumbs.ConfigureStackTraces(true, 32)
 
 	ctx := context.Background()
 
@@ -30,7 +27,7 @@ func DemonstrateStackTraces() {
 
 	// Disable stack traces
 	fmt.Println("\n2. Disabling stack traces globally:")
-	crumbs.CaptureStack = false
+	crumbs.ConfigureStackTraces(false, 32)
 
 	// Create an error without stack trace
 	err2 := level1Function(ctx)
@@ -53,20 +50,17 @@ func DemonstrateStackTraces() {
 
 	// Configure stack trace depth
 	fmt.Println("\n4. Configuring stack trace depth:")
-	crumbs.CaptureStack = true
 
 	// Set a smaller stack depth to get less frames
-	originalDepth := crumbs.StackTraceDepth
-	crumbs.StackTraceDepth = 2
+	crumbs.ConfigureStackTraces(true, 2)
 
 	err4 := level1Function(ctx)
 
 	fmt.Println("\nError with limited stack depth:")
 	fmt.Println(crumbs.FormatError(err4, true, true))
 
-	// Restore original settings
-	crumbs.CaptureStack = originalSetting
-	crumbs.StackTraceDepth = originalDepth
+	// Restore default settings
+	crumbs.ConfigureStackTraces(false, 32)
 }
 
 // Helper functions to create a call stack
@@ -79,5 +73,5 @@ func level2Function(ctx context.Context) error {
 }
 
 func level3Function(ctx context.Context) error {
-	return crumbs.New(ctx, "error at level 3", "level", 3)
+	return crumbs.NewError(ctx, "error at level 3", "level", 3)
 }

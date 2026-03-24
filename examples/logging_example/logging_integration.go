@@ -114,11 +114,11 @@ func DemonstrateLoggingIntegration() {
 	)
 
 	// Enable stack traces for this example
-	crumbs.CaptureStack = true
-	defer func() { crumbs.CaptureStack = false }()
+	crumbs.ConfigureStackTraces(true, 32)
+	defer func() { crumbs.ConfigureStackTraces(false, 32) }()
 
 	// Create an error with additional crumbs
-	err := crumbs.New(ctx, "operation failed",
+	err := crumbs.NewError(ctx, "operation failed",
 		"operation", "getData",
 		"status", 500,
 	)
@@ -127,10 +127,11 @@ func DemonstrateLoggingIntegration() {
 	LogError(logger, err)
 
 	// Create a more complex error chain
-	baseErr := errors.New("network timeout")
-	wrappedErr := crumbs.Wrap(ctx, baseErr, "API request failed",
+	// Wrap an existing error
+	baseErr := errors.New("connection reset by peer")
+	wrappedErr := crumbs.WrapError(ctx, baseErr, "API request failed",
 		"endpoint", "/api/v1/users",
-		"method", "GET",
+		"method", "POST",
 	)
 
 	fmt.Println("\nLogging a wrapped error with crumbs:")

@@ -35,13 +35,11 @@ func ServiceLayer(ctx context.Context) error {
 	// Simulate some work
 	// ...
 
-	// Call database layer
+	// Call the database layer
 	if err := DatabaseLayer(ctx); err != nil {
-		// Wrap the error. The error will automatically inherit
-		// "trace_id", "path", and "method" from the context!
-		return crumbs.Wrap(ctx, err, "service layer failed")
+		// Wrap the error with more context
+		return crumbs.WrapError(ctx, err, "service layer failed")
 	}
-
 	return nil
 }
 
@@ -49,10 +47,10 @@ func ServiceLayer(ctx context.Context) error {
 func DatabaseLayer(ctx context.Context) error {
 	// Simulate a failure
 	// We can add more specific context here
-	return crumbs.New(ctx, "connection timeout",
-		"db_host", "localhost",
-		"db_port", 5432,
-	)
+	// Simulate an error
+	return crumbs.NewError(ctx, "connection timeout",
+		"service", "db",
+		"retry_count", 3)
 }
 
 // Handler simulates an HTTP handler

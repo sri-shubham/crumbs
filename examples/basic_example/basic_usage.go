@@ -15,13 +15,13 @@ func DemonstrateBasicUsage() {
 
 	// Example 1: Creating a simple error
 	fmt.Println("Example 1: Basic Error Creation")
-	err1 := crumbs.New(ctx, "something went wrong")
+	err1 := crumbs.NewError(ctx, "something went wrong")
 	fmt.Println(err1)
 	fmt.Println()
 
 	// Example 2: Creating an error with key-value pairs
 	fmt.Println("Example 2: Error with Key-Value Pairs")
-	err2 := crumbs.New(ctx, "failed to process request",
+	err2 := crumbs.NewError(ctx, "failed to process request",
 		"requestID", "123456",
 		"user", "alice",
 		"timestamp", "2025-08-17T10:15:30Z")
@@ -35,13 +35,10 @@ func DemonstrateBasicUsage() {
 	// Example 3: Wrapping an existing error
 	fmt.Println("Example 3: Wrapping Errors")
 	baseErr := errors.New("connection refused")
-	wrappedErr := crumbs.Wrap(ctx, baseErr, "database connection failed",
-		"host", "db.example.com",
-		"port", 5432,
-		"attempts", 3)
-	fmt.Println(wrappedErr)
-
-	// Print with details
+	wrappedErr := crumbs.WrapError(ctx, baseErr, "database connection failed",
+		"db_host", "localhost",
+		"db_port", 5432)
+	fmt.Println(wrappedErr)	// Print with details
 	fmt.Println("\nFormatted wrapped error:")
 	fmt.Println(crumbs.FormatError(wrappedErr, false, true))
 	fmt.Println()
