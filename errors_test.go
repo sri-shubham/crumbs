@@ -352,3 +352,83 @@ func TestFormatError(t *testing.T) {
 		}
 	})
 }
+
+func TestConfigureStackTraces(t *testing.T) {
+	ConfigureStackTraces(true, 10)
+	if !captureStack || stackTraceDepth != 10 {
+		t.Errorf("ConfigureStackTraces failed")
+	}
+	ConfigureStackTraces(false, 32)
+}
+
+func TestBadKeysAndCoverage(t *testing.T) {
+	ctx := context.Background()
+
+	// 1. Wrapf with nil err
+	if Wrapf(ctx, nil, "fmt %s", "a") != nil {
+		t.Error("Wrapf should handle nil err")
+	}
+
+	// 2. FormatStack with no stack
+	err := NewError(ctx, "msg").(*Error)
+	if err.FormatStack() != "no stack trace available" {
+		t.Error("FormatStack should return 'no stack trace available'")
+	}
+
+	// 3. newError dangling key
+	err2 := NewError(ctx, "msg", "key", "val", "dangling").(*Error)
+	if len(err2.Crumbs) != 2 || err2.Crumbs[1].Key != "!BADKEY" || err2.Crumbs[1].Value != "dangling" {
+		t.Error("Dangling key not mapped to !BADKEY")
+	}
+
+	// 4. newError odd key that is not string
+	err3 := NewError(ctx, "msg", "key", "val", 123).(*Error)
+	if len(err3.Crumbs) != 2 || err3.Crumbs[1].Key != "!BADKEY" || err3.Crumbs[1].Value != 123 {
+		t.Error("Odd non-string key not mapped to !BADKEY")
+	}
+
+	// 4b. newError even non-string key ignored
+	err3b := NewError(ctx, "msg", 123, "val").(*Error)
+	if len(err3b.Crumbs) != 0 {
+		t.Error("Even non-string key not ignored")
+	}
+
+	// 5. AddCrumb dangling key
+	ctx2 := AddCrumb(ctx, "key", "val", "dangling")
+	crumbs := GetCrumbs(ctx2)
+	if len(crumbs) != 2 || crumbs[1].Key != "!BADKEY" || crumbs[1].Value != "dangling" {
+		t.Error("AddCrumb dangling key failed")
+	}
+
+	// 6. AddCrumb odd non-string key
+	ctx3 := AddCrumb(ctx, "key", "val", 123)
+	crumbs = GetCrumbs(ctx3)
+	if len(crumbs) != 2 || crumbs[1].Key != "!BADKEY" || crumbs[1].Value != 123 {
+		t.Error("AddCrumb non-string dangling key failed")
+	}
+
+	// 7. AddCrumb even non-string key
+	ctx4 := AddCrumb(ctx, 123, "val")
+	if len(GetCrumbs(ctx4)) != 0 {
+		t.Error("AddCrumb even non-string key not ignored")
+	}
+
+	// 8. Error method fallbacks
+	var emptyErr *Error = &Error{}
+	if emptyErr.Error() != "unknown error" {
+		t.Error("Empty Error.Error() failed")
+	}
+	wrapErr := &Error{Err: errors.New("base")}
+	if wrapErr.Error() != "base" {
+		t.Error("Error() falling back to base failed")
+	}
+}
+
+func TestGetCrumbsNil(t *testing.T) {
+	if GetCrumbs(nil) != nil {
+		t.Error("GetCrumbs(nil) should be nil")
+	}
+	if GetCrumbs(context.Background()) != nil {
+		t.Error("GetCrumbs(emptyCtx) should be nil")
+	}
+}
