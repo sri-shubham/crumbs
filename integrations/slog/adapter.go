@@ -13,6 +13,14 @@ import (
 // Adapter implements logger.Logger using log/slog
 type Adapter struct {
 	logger *slog.Logger
+
+	// withArgs are key-value pairs accumulated via With, merged into every
+	// subsequent log call's args (rather than baked into logger via
+	// slog.Logger.With) so they still go through the same error-stringify
+	// and crumb-splat logic as call-site args. See adapter_test.go's
+	// TestAdapter_WithPreservesErrorCrumbs for the regression this guards
+	// against.
+	withArgs []any
 }
 
 // New creates a new slog adapter
@@ -55,10 +63,17 @@ func (l *Adapter) log(ctx context.Context, level slog.Level, msg string, args ..
 		return
 	}
 
-	logArgs := make([]any, 0, len(args)+4)
+	all := args
+	if len(l.withArgs) > 0 {
+		all = make([]any, 0, len(l.withArgs)+len(args))
+		all = append(all, l.withArgs...)
+		all = append(all, args...)
+	}
+
+	logArgs := make([]any, 0, len(all)+4)
 
 	var cerr *crumbs.Error
-	for _, a := range args {
+	for _, a := range all {
 		// Replace error values with their string form so JSON/text handlers
 		// emit the message rather than an opaque struct representation. Also
 		// remember the first *crumbs.Error so we can splat its crumbs.
@@ -86,10 +101,16 @@ func (l *Adapter) log(ctx context.Context, level slog.Level, msg string, args ..
 }
 
 // With returns a derived Adapter that includes the supplied key-value args
-// on every subsequent log call. The underlying slog.Logger is preserved, so
-// crumb-extraction semantics are unchanged.
+// on every subsequent log call. Args are merged at log time (not baked into
+// the underlying slog.Logger via slog.Logger.With) so an error passed here
+// still gets stringified and, if it is a *crumbs.Error, has its crumbs
+// splatted onto every subsequent log line exactly as if passed at the call
+// site.
 func (l *Adapter) With(args ...any) logger.Logger {
-	return &Adapter{logger: l.logger.With(args...)}
+	merged := make([]any, 0, len(l.withArgs)+len(args))
+	merged = append(merged, l.withArgs...)
+	merged = append(merged, args...)
+	return &Adapter{logger: l.logger, withArgs: merged}
 }
 
 // Ensure Adapter implements logger.Logger

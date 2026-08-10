@@ -193,3 +193,181 @@ func TestAdapter_With(t *testing.T) {
 		t.Errorf("ctx crumb missing, got %v", entry["request_id"])
 	}
 }
+
+// Regression: an error passed via With must still be stringified and have
+// its crumbs splatted on every subsequent call, same as when passed at the
+// call site. Previously With baked args straight into slog.Logger.With,
+// bypassing the adapter's error/crumb extraction entirely.
+func TestAdapter_WithPreservesErrorCrumbs(t *testing.T) {
+	var buf bytes.Buffer
+	h := slog.NewJSONHandler(&buf, &slog.HandlerOptions{Level: slog.LevelDebug})
+	adapter := crumbslog.New(slog.New(h))
+	ctx := context.Background()
+
+	richErr := crumbs.NewError(ctx, "db failure", "table", "users", "retry", 3)
+	child := adapter.With("err", richErr)
+
+	child.Info(ctx, "first call")
+	var entry map[string]any
+	if err := json.Unmarshal(buf.Bytes(), &entry); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if entry["err"] != "db failure" {
+		t.Errorf("expected err stringified to 'db failure', got %v", entry["err"])
+	}
+	if entry["table"] != "users" {
+		t.Errorf("expected table crumb 'users', got %v", entry["table"])
+	}
+	if entry["retry"] != float64(3) {
+		t.Errorf("expected retry crumb 3, got %v", entry["retry"])
+	}
+
+	// Crumbs must reappear on a second call too, not just the first.
+	buf.Reset()
+	child.Info(ctx, "second call")
+	if err := json.Unmarshal(buf.Bytes(), &entry); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if entry["table"] != "users" {
+		t.Errorf("expected table crumb on second call, got %v", entry["table"])
+	}
+}
+
+// Chained With calls must accumulate args from every link, not just the last.
+func TestAdapter_ChainedWith(t *testing.T) {
+	var buf bytes.Buffer
+	h := slog.NewJSONHandler(&buf, &slog.HandlerOptions{Level: slog.LevelDebug})
+	adapter := crumbslog.New(slog.New(h))
+	ctx := context.Background()
+
+	richErr := crumbs.NewError(ctx, "db failure", "table", "users")
+	child := adapter.With("service", "checkout").With("err", richErr)
+
+	child.Info(ctx, "chained")
+	var entry map[string]any
+	if err := json.Unmarshal(buf.Bytes(), &entry); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if entry["service"] != "checkout" {
+		t.Errorf("expected service from first With, got %v", entry["service"])
+	}
+	if entry["err"] != "db failure" {
+		t.Errorf("expected err stringified from second With, got %v", entry["err"])
+	}
+	if entry["table"] != "users" {
+		t.Errorf("expected crumb from second With's error, got %v", entry["table"])
+	}
+}
+
+// A call-site arg for the same key as a With arg must override it, since
+// call-site args are appended after withArgs in the merged slice and slog's
+// JSON output keeps last-write-wins semantics for duplicate keys.
+func TestAdapter_CallSiteOverridesWith(t *testing.T) {
+	var buf bytes.Buffer
+	h := slog.NewJSONHandler(&buf, &slog.HandlerOptions{Level: slog.LevelDebug})
+	adapter := crumbslog.New(slog.New(h))
+	ctx := context.Background()
+
+	child := adapter.With("stage", "auth")
+	child.Info(ctx, "ok", "stage", "checkout")
+
+	var entry map[string]any
+	if err := json.Unmarshal(buf.Bytes(), &entry); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if entry["stage"] != "checkout" {
+		t.Errorf("expected call-site stage to win, got %v", entry["stage"])
+	}
+}
+
+// When both a With-supplied *crumbs.Error and a call-site *crumbs.Error are
+// present, the first one encountered (the With arg, since withArgs precede
+// call-site args in the merged slice) wins the crumb splat.
+func TestAdapter_WithErrorWinsOverCallSiteError(t *testing.T) {
+	var buf bytes.Buffer
+	h := slog.NewJSONHandler(&buf, &slog.HandlerOptions{Level: slog.LevelDebug})
+	adapter := crumbslog.New(slog.New(h))
+	ctx := context.Background()
+
+	withErr := crumbs.NewError(ctx, "with error", "src", "with")
+	callSiteErr := crumbs.NewError(ctx, "call-site error", "src", "callsite")
+
+	child := adapter.With("err", withErr)
+	child.Error(ctx, "both", "err2", callSiteErr)
+
+	var entry map[string]any
+	if err := json.Unmarshal(buf.Bytes(), &entry); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if entry["src"] != "with" {
+		t.Errorf("expected With's error crumbs to win, got %v", entry["src"])
+	}
+}
+
+// A *crumbs.Error supplied via With must suppress ctx crumb lookup, same as
+// when the error is passed at the call site, to avoid duplicate crumbs.
+func TestAdapter_WithErrorSuppressesCtxCrumbs(t *testing.T) {
+	var buf bytes.Buffer
+	h := slog.NewJSONHandler(&buf, &slog.HandlerOptions{Level: slog.LevelDebug})
+	adapter := crumbslog.New(slog.New(h))
+
+	withErr := crumbs.NewError(context.Background(), "boom", "src", "with")
+	child := adapter.With("err", withErr)
+
+	ctxWithCrumbs := crumbs.AddCrumb(context.Background(), "request_id", "rid-3")
+	child.Info(ctxWithCrumbs, "no dup")
+
+	var entry map[string]any
+	if err := json.Unmarshal(buf.Bytes(), &entry); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if _, ok := entry["request_id"]; ok {
+		t.Errorf("expected ctx crumb suppressed when With error present, got request_id=%v", entry["request_id"])
+	}
+	if entry["src"] != "with" {
+		t.Errorf("expected With error's crumb present, got %v", entry["src"])
+	}
+}
+
+// A plain (non-*crumbs.Error) error passed via With must still be
+// stringified, and since it contributes no crumbs, ctx crumbs still apply.
+func TestAdapter_WithNonCrumbsErrorStillAllowsCtxCrumbs(t *testing.T) {
+	var buf bytes.Buffer
+	h := slog.NewJSONHandler(&buf, &slog.HandlerOptions{Level: slog.LevelDebug})
+	adapter := crumbslog.New(slog.New(h))
+
+	child := adapter.With("err", errors.New("boom"))
+	ctxWithCrumbs := crumbs.AddCrumb(context.Background(), "request_id", "rid-4")
+	child.Info(ctxWithCrumbs, "plain via with")
+
+	var entry map[string]any
+	if err := json.Unmarshal(buf.Bytes(), &entry); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if entry["err"] != "boom" {
+		t.Errorf("expected plain error stringified, got %v", entry["err"])
+	}
+	if entry["request_id"] != "rid-4" {
+		t.Errorf("expected ctx crumb still applied, got %v", entry["request_id"])
+	}
+}
+
+// Deriving a child via With must not mutate the parent: the parent's log
+// calls must not gain the child's withArgs.
+func TestAdapter_WithParentImmutability(t *testing.T) {
+	var buf bytes.Buffer
+	h := slog.NewJSONHandler(&buf, &slog.HandlerOptions{Level: slog.LevelDebug})
+	parent := crumbslog.New(slog.New(h))
+	ctx := context.Background()
+
+	_ = parent.With("service", "checkout")
+
+	parent.Info(ctx, "parent call")
+	var entry map[string]any
+	if err := json.Unmarshal(buf.Bytes(), &entry); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if _, ok := entry["service"]; ok {
+		t.Errorf("With must not mutate parent, but parent log has service=%v", entry["service"])
+	}
+}
